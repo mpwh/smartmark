@@ -19,7 +19,7 @@ export function createMemoryFS(seed: Record<string, string>): VFS {
 
 export const sampleFS = () =>
   createMemoryFS({
-    'README.md': '# Smartmark\n\nWelcome. **Bold**, *italic*, `code`, and a [link](https://example.com).\n\n- [ ] todo\n- [x] done\n\n| a | b |\n|---|---|\n| 1 | 2 |\n',
+    'README.md': '# Smartmark\n\nWelcome. **Bold**, *italic*, `code`, and a [link](https://example.com).\n\n- plain bullet\n- another\n\n- [ ] todo\n- [x] done\n\n| a | b |\n|---|---|\n| 1 | 2 |\n',
     'notes/ideas.md': '---\ntitle: Ideas\n---\n\n## Ideas\n\n1. Ship the tree\n2. Ship the editor\n',
     'notes/deep/log.markdown': '# Log\n\nSome text.\n',
     'notes/photo.png': '',

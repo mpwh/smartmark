@@ -3,7 +3,8 @@ import { EditorState, type Extension } from '@codemirror/state'
 import { EditorView, keymap, drawSelection } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { markdown } from '@codemirror/lang-markdown'
-import { Table } from '@lezer/markdown'
+import { Table, TaskList } from '@lezer/markdown'
+import { frontmatterParser, markdownExtras } from './mdExtras'
 import {
   livePreviewPlugin,
   markdownStylePlugin,
@@ -36,6 +37,7 @@ const liveExtensions: Extension[] = [
   tableField,
   imageField(),
   linkPlugin(),
+  markdownExtras,
 ]
 
 export function Editor({ docKey, value, mode, onChange, onSave }: Props) {
@@ -59,7 +61,7 @@ export function Editor({ docKey, value, mode, onChange, onSave }: Props) {
           history(),
           drawSelection(),
           EditorView.lineWrapping,
-          markdown({ extensions: [Table] }),
+          markdown({ extensions: [Table, TaskList, frontmatterParser] }),
           ...(mode === 'live' ? liveExtensions : []),
           keymap.of([
             { key: 'Mod-s', preventDefault: true, run: () => (cb.current.onSave(), true) },
