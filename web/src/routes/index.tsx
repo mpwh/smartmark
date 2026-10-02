@@ -6,6 +6,8 @@ import { buildTree } from '../vfs/tree'
 import { FileTree } from '../components/FileTree'
 import { Editor, type EditorMode } from '../components/Editor'
 import { ReadView } from '../components/ReadView'
+import { WorkspaceSwitcher } from '../components/WorkspaceSwitcher'
+import { ConflictError } from '../vfs/types'
 
 type View = 'live' | 'source' | 'read'
 
@@ -40,18 +42,49 @@ function Workspace() {
     setDirty(false)
   }, [file, content.data])
 
-  const save = async () => {
-    if (!file) return
-    await vfs.write(file, draft.current)
-    qc.setQueryData(['file', file], draft.current)
-    setDirty(false)
-  }
-  // Autosave 1s after the last edit.
+  const [conflict, setConflict] = useState(false)
+  const [saveError, setSaveError] = useState('')
   useEffect(() => {
-    if (!dirty) return
-    const t = setTimeout(save, 1000)
+    setConflict(false)
+    setSaveError('')
+  }, [file])
+
+  const save = async (force = false) => {
+    if (!file) return
+    try {
+      await vfs.write(file, draft.current, { force })
+      qc.setQueryData(['file', file], draft.current)
+      setDirty(false)
+      setConflict(false)
+      setSaveError('')
+    } catch (e) {
+      if (e instanceof ConflictError) setConflict(true)
+      else setSaveError(e instanceof Error ? e.message : 'Save failed')
+    }
+  }
+  // Autosave 1s after the last edit; paused while a conflict or error awaits the user.
+  useEffect(() => {
+    if (!dirty || conflict || saveError) return
+    const t = setTimeout(() => save(), 1000)
     return () => clearTimeout(t)
   })
+
+  // External changes: refresh the tree, and the open file unless the user has unsaved edits.
+  const dirtyRef = useRef(dirty)
+  dirtyRef.current = dirty
+  useEffect(() => {
+    if (!vfs.watch) return
+    return vfs.watch((changed) => {
+      qc.invalidateQueries({ queryKey: ['paths'] })
+      if (file && changed.includes(file) && !dirtyRef.current) qc.invalidateQueries({ queryKey: ['file', file] })
+    })
+  }, [vfs, file, qc])
+
+  const reloadFromDisk = async () => {
+    setConflict(false)
+    setDirty(false)
+    await qc.invalidateQueries({ queryKey: ['file', file] })
+  }
 
   const setView = (v: View) => navigate({ search: (s) => ({ ...s, view: v === 'live' ? undefined : v }) })
 
@@ -64,6 +97,7 @@ function Workspace() {
             <input type="checkbox" checked={showOthers} onChange={(e) => setShowOthers(e.target.checked)} /> other files
           </label>
         </div>
+        <WorkspaceSwitcher />
         <FileTree nodes={tree} selected={file} onOpen={(f) => navigate({ search: (s) => ({ ...s, file: f }) })} />
       </aside>
       <main className="main">
@@ -84,6 +118,19 @@ function Workspace() {
                 ))}
               </div>
             </header>
+            {conflict && (
+              <div className="banner">
+                This file changed on disk since you opened it.
+                <button onClick={reloadFromDisk}>Discard mine, reload</button>
+                <button onClick={() => save(true)}>Overwrite with mine</button>
+              </div>
+            )}
+            {saveError && (
+              <div className="banner">
+                Save failed: {saveError}
+                <button onClick={() => save()}>Retry</button>
+              </div>
+            )}
             {content.isPending ? (
               <p className="empty">Loading…</p>
             ) : content.error ? (
@@ -99,7 +146,7 @@ function Workspace() {
                   draft.current = t
                   setDirty(true)
                 }}
-                onSave={save}
+                onSave={() => save()}
               />
             )}
           </>

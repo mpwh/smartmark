@@ -29,3 +29,11 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.6 system-ui, sans-s
 .read table { border-collapse: collapse; }
 .read th, .read td { border: 1px solid var(--line); padding: 4px 10px; }
 .read pre { background: var(--side); padding: 12px; overflow: auto; }
+.switcher { padding: 0 12px 8px; font-size: 12px; }
+.switch-row { display: flex; gap: 4px; }
+.switch-row select { flex: 1; min-width: 0; }
+.switch-row button, .connect-form button, .banner button { cursor: pointer; }
+.connect-form { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.connect-form .hint { color: var(--muted); margin: 2px 0 0; }
+.err { color: #dc2626; margin: 0; }
+.banner { display: flex; gap: 8px; align-items: center; padding: 6px 16px; background: #fef3c7; color: #78350f; font-size: 13px; }

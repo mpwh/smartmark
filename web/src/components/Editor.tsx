@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { EditorState, type Extension } from '@codemirror/state'
+import { EditorState, Transaction, type Extension } from '@codemirror/state'
 import { EditorView, keymap, drawSelection } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { markdown } from '@codemirror/lang-markdown'
@@ -42,6 +42,7 @@ const liveExtensions: Extension[] = [
 
 export function Editor({ docKey, value, mode, onChange, onSave }: Props) {
   const host = useRef<HTMLDivElement>(null)
+  const viewRef = useRef<EditorView | null>(null)
   const cb = useRef({ onChange, onSave })
   cb.current = { onChange, onSave }
   // Latest text, so a mode switch keeps unsaved edits.
@@ -71,12 +72,13 @@ export function Editor({ docKey, value, mode, onChange, onSave }: Props) {
           EditorView.updateListener.of((u) => {
             if (u.docChanged) {
               text.current = u.state.doc.toString()
-              cb.current.onChange(text.current)
+              if (!u.transactions.some((t) => t.annotation(Transaction.remote))) cb.current.onChange(text.current)
             }
           }),
         ],
       }),
     })
+    viewRef.current = view
     const down = () => view.dispatch({ effects: setMouseSelecting.of(true) })
     const up = () => requestAnimationFrame(() => view.dispatch({ effects: setMouseSelecting.of(false) }))
     if (mode === 'live') {
@@ -86,8 +88,20 @@ export function Editor({ docKey, value, mode, onChange, onSave }: Props) {
     return () => {
       document.removeEventListener('mouseup', up)
       view.destroy()
+      viewRef.current = null
     }
   }, [docKey, mode])
+
+  // Apply external updates (file changed on disk); a no-op when value already matches the document.
+  useEffect(() => {
+    const view = viewRef.current
+    if (view && view.state.doc.toString() !== value) {
+      text.current = value
+      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value },
+        annotations: Transaction.remote.of(true),
+      })
+    }
+  }, [value])
 
   return <div className="editor" ref={host} />
 }
