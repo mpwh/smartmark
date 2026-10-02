@@ -1,9 +1,21 @@
-export interface Connection {
-  id: string
-  name: string
-  kind: 'agent'
-  url: string
-  token: string
+export type Connection =
+  | { id: string; name: string; kind: 'agent'; url: string; token: string }
+  | { id: string; name: string; kind: 'github'; owner: string; repo: string; branch: string; token: string }
+
+/** Short human label shown in the workspace switcher. */
+export function label(c: Connection): string {
+  if (c.kind === 'github') return `${c.owner}/${c.repo} (${c.branch})`
+  try {
+    return `${c.name} (${new URL(c.url).host})`
+  } catch {
+    return c.name
+  }
+}
+
+/** Accepts "owner/repo" or a github.com URL. */
+export function parseRepo(input: string): { owner: string; repo: string } | null {
+  const m = input.trim().replace(/^https?:\/\/github\.com\//, '').replace(/\.git$/, '').replace(/\/+$/, '').match(/^([\w.-]+)\/([\w.-]+)$/)
+  return m ? { owner: m[1], repo: m[2] } : null
 }
 
 const KEY = 'smartmark.connections'

@@ -62,12 +62,31 @@ function Workspace() {
       else setSaveError(e instanceof Error ? e.message : 'Save failed')
     }
   }
-  // Autosave 1s after the last edit; paused while a conflict or error awaits the user.
+  // Autosave 1s after the last edit (unless the source saves explicitly, e.g. one git commit per save);
+  // paused while a conflict or error awaits the user.
   useEffect(() => {
-    if (!dirty || conflict || saveError) return
+    if (vfs.autosave === false || !dirty || conflict || saveError) return
     const t = setTimeout(() => save(), 1000)
     return () => clearTimeout(t)
   })
+
+  // Warn before closing the tab with unsaved edits.
+  useEffect(() => {
+    if (!dirty) return
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault()
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [dirty])
+
+  const [saving, setSaving] = useState(false)
+  const saveNow = async () => {
+    setSaving(true)
+    try {
+      await save()
+    } finally {
+      setSaving(false)
+    }
+  }
 
   // External changes: refresh the tree, and the open file unless the user has unsaved edits.
   const dirtyRef = useRef(dirty)
@@ -110,6 +129,11 @@ function Workspace() {
                 {file}
                 {dirty ? ' •' : ''}
               </span>
+              {vfs.autosave === false && (
+                <button className="save" disabled={!dirty || saving} onClick={saveNow} title="Save (Ctrl/Cmd+S)">
+                  {saving ? 'Saving…' : dirty ? 'Save' : 'Saved'}
+                </button>
+              )}
               <div className="seg">
                 {(['live', 'source', 'read'] as View[]).map((v) => (
                   <button key={v} className={v === view ? 'on' : ''} onClick={() => setView(v)}>
@@ -146,7 +170,7 @@ function Workspace() {
                   draft.current = t
                   setDirty(true)
                 }}
-                onSave={() => save()}
+                onSave={saveNow}
               />
             )}
           </>

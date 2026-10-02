@@ -3,11 +3,14 @@ import { useQueryClient } from '@tanstack/react-query'
 import { VFSContext } from './vfs/context'
 import { sampleFS } from './vfs/memory'
 import { createAgentFS } from './vfs/agent'
+import { createGitHubFS, fetchRepo } from './vfs/github'
+import type { VFS } from './vfs/types'
 import {
   getActiveId,
   loadConnections,
   newId,
   parseConnectHash,
+  parseRepo,
   saveConnections,
   setActiveId,
   type Connection,
@@ -18,7 +21,12 @@ interface WorkspaceCtx {
   activeId: string | null
   select(id: string | null): void
   connect(url: string, token: string): Promise<void>
+  connectGitHub(repo: string, branch: string, token: string): Promise<void>
   remove(id: string): void
+}
+
+function createFS(c: Connection): VFS {
+  return c.kind === 'github' ? createGitHubFS(c) : createAgentFS(c)
 }
 
 const Ctx = createContext<WorkspaceCtx | null>(null)
@@ -53,8 +61,25 @@ export function WorkspaceProvider({ children }: { children: (key: string) => Rea
     async (url: string, token: string) => {
       const fs = createAgentFS({ url, token })
       const info = await fs.info() // throws on bad URL/token, so nothing bad is saved
-      const existing = connections.find((c) => c.url === url && c.token === token)
+      const existing = connections.find((c) => c.kind === 'agent' && c.url === url && c.token === token)
       const conn: Connection = existing ?? { id: newId(), name: info.name, kind: 'agent', url, token }
+      if (!existing) update([...connections, conn])
+      select(conn.id)
+    },
+    [connections, update, select],
+  )
+
+  const connectGitHub = useCallback(
+    async (repoInput: string, branchInput: string, token: string) => {
+      const parsed = parseRepo(repoInput)
+      if (!parsed) throw new Error('Use the form owner/repo')
+      const info = await fetchRepo(parsed.owner, parsed.repo, token) // throws on bad token or no access
+      const branch = branchInput.trim() || info.defaultBranch
+      const [owner, repo] = info.fullName.split('/')
+      const existing = connections.find(
+        (c) => c.kind === 'github' && c.owner === owner && c.repo === repo && c.branch === branch && c.token === token,
+      )
+      const conn: Connection = existing ?? { id: newId(), name: info.fullName, kind: 'github', owner, repo, branch, token }
       if (!existing) update([...connections, conn])
       select(conn.id)
     },
@@ -79,8 +104,11 @@ export function WorkspaceProvider({ children }: { children: (key: string) => Rea
   }, [])
 
   const active = connections.find((c) => c.id === activeId)
-  const vfs = useMemo(() => (active ? createAgentFS(active) : sampleFS()), [active])
-  const value = useMemo(() => ({ connections, activeId, select, connect, remove }), [connections, activeId, select, connect, remove])
+  const vfs = useMemo(() => (active ? createFS(active) : sampleFS()), [active])
+  const value = useMemo(
+    () => ({ connections, activeId, select, connect, connectGitHub, remove }),
+    [connections, activeId, select, connect, connectGitHub, remove],
+  )
 
   return (
     <Ctx.Provider value={value}>

@@ -4,6 +4,8 @@ export interface WriteOptions {
 }
 
 export interface VFS {
+  /** false: no timed autosave, the user saves explicitly (e.g. each save is a git commit). */
+  autosave?: false
   /** Every file path in the workspace (posix, no leading slash). Dot-folders may be included; the tree filters them. */
   listAll(): Promise<string[]>
   read(path: string): Promise<string>
